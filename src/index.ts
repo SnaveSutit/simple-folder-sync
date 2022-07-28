@@ -2,7 +2,7 @@ import { FSWatcher, watch } from 'chokidar'
 import * as fs from 'fs'
 import * as pathlib from 'path'
 import * as YML from 'js-yaml'
-import { movePath } from './util'
+import { movePath, resolveToAbsolutePath } from './util'
 
 interface IConfig {
 	sync_paths: { [index: string]: string }
@@ -20,7 +20,7 @@ function updateConfig() {
 		console.log(e.message)
 	}
 	for (const [_in, _out] of Object.entries(config.sync_paths)) {
-		if (_out) sync_paths[_in] = _out
+		if (_out) sync_paths[resolveToAbsolutePath(_in)] = resolveToAbsolutePath(_out)
 		else console.log(`Error: Path '${_in}' has no target path.`)
 	}
 }

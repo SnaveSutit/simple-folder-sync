@@ -11,7 +11,7 @@
 		"type": "github",
 		"url": "https://github.com/SnaveSutit/simple-folder-sync"
 	},
-	"description": "A one-way file sync tool",
+	"description": "A super simple one-way file sync tool",
 	"main": "./dist/index.js",
 	"types": "./dist/src/index.d.ts",
 	"private": true,
