@@ -12,6 +12,30 @@ let config: IConfig
 let sync_paths: { [index: string]: string } = {}
 let watchers: FSWatcher[] = []
 
+function debounce(callback: () => void, delay = 250) {
+	let timeout: NodeJS.Timeout
+	return () => {
+		clearTimeout(timeout)
+		timeout = setTimeout(callback, delay)
+	}
+}
+
+const changes = {
+	added: [] as string[],
+	changed: [] as string[],
+	deleted: [] as string[],
+}
+
+const printChanges = debounce(() => {
+	console.log('Changes synced!')
+	console.log(`- Added ${changes.added.length} files`)
+	console.log(`- Changed ${changes.changed.length} files`)
+	console.log(`- Deleted ${changes.deleted.length} files`)
+	changes.added = []
+	changes.changed = []
+	changes.deleted = []
+})
+
 function updateConfig() {
 	try {
 		config = YML.load(fs.readFileSync('sync-config.yml', 'utf8')) as IConfig
@@ -26,7 +50,6 @@ function updateConfig() {
 }
 
 function copyOver(in_path: string, out_path: string, stats?: fs.Stats) {
-	console.log(`Synced '${out_path}'`)
 	const par = pathlib.parse(out_path)
 	if (!fs.existsSync(par.dir)) fs.mkdirSync(par.dir, { recursive: true })
 	fs.copyFileSync(in_path, out_path)
@@ -36,6 +59,7 @@ async function updateWatchers() {
 	for (const watcher of watchers) {
 		await watcher.close()
 	}
+	watchers = []
 	for (const [_in, _out] of Object.entries(sync_paths)) {
 		watchers.push(
 			watch(_in, {
@@ -47,26 +71,28 @@ async function updateWatchers() {
 				.on('add', (in_path, stats) => {
 					const out_path = movePath(_in, _out, in_path)
 					copyOver(in_path, out_path, stats)
+					changes.added.push(out_path)
+					printChanges()
 				})
 				.on('change', (in_path, stats) => {
 					const out_path = movePath(_in, _out, in_path)
 					copyOver(in_path, out_path, stats)
+					changes.changed.push(out_path)
+					printChanges()
 				})
 				.on('unlink', path => {
-					console.log(`Deletion of '${path}' synced.`)
 					const out_path = movePath(_in, _out, path)
 					const par = pathlib.parse(out_path)
 					fs.rmSync(out_path)
 					fs.readdirSync(par.dir).length || fs.rmdirSync(par.dir)
+					changes.deleted.push(out_path)
+					printChanges()
 				})
 		)
 	}
 }
 
 async function main() {
-	updateConfig()
-	await updateWatchers()
-
 	const configWatcher = watch('./sync-config.yml', {
 		ignored: /(^|[\/\\])\../, // ignore dotfiles
 		persistent: true,
@@ -79,6 +105,8 @@ async function main() {
 		}
 	})
 
+	updateConfig()
+	console.log(`Running initial sync...`)
 	await updateWatchers()
 }
 
