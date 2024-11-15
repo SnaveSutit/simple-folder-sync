@@ -22,10 +22,6 @@ const printChanges = debounce(() => {
 	console.log(termPrefix, chalk.red(`- Deleted ${changes.deleted.length} files`))
 	console.log('')
 
-	// console.log('Changes synced!')
-	// console.log(`- Added ${changes.added.length} files`)
-	// console.log(`- Changed ${changes.changed.length} files`)
-	// console.log(`- Deleted ${changes.deleted.length} files`)
 	changes.added = []
 	changes.changed = []
 	changes.deleted = []
