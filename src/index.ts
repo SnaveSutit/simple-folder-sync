@@ -1,24 +1,13 @@
 import { FSWatcher, watch } from 'chokidar'
 import * as fs from 'fs'
 import * as pathlib from 'path'
-import * as YML from 'js-yaml'
-import { movePath, resolveToAbsolutePath } from './util'
+import { debounce, movePath } from './util'
+import { config, updateConfig } from './configHandler'
+import chalk from 'chalk'
 
-interface IConfig {
-	sync_paths: { [index: string]: string }
-	ignored?: string[]
-}
-let config: IConfig
-let sync_paths: { [index: string]: string } = {}
+const termPrefix = chalk.gray('[') + chalk.yellow('simple-sync') + chalk.gray(']')
+
 let watchers: FSWatcher[] = []
-
-function debounce(callback: () => void, delay = 250) {
-	let timeout: NodeJS.Timeout
-	return () => {
-		clearTimeout(timeout)
-		timeout = setTimeout(callback, delay)
-	}
-}
 
 const changes = {
 	added: [] as string[],
@@ -27,27 +16,20 @@ const changes = {
 }
 
 const printChanges = debounce(() => {
-	console.log('Changes synced!')
-	console.log(`- Added ${changes.added.length} files`)
-	console.log(`- Changed ${changes.changed.length} files`)
-	console.log(`- Deleted ${changes.deleted.length} files`)
+	console.log(termPrefix, chalk.blue.underline('Changes synced!'))
+	console.log(termPrefix, chalk.green(`+ Added ${changes.added.length} files`))
+	console.log(termPrefix, chalk.yellow(`~ Changed ${changes.changed.length} files`))
+	console.log(termPrefix, chalk.red(`- Deleted ${changes.deleted.length} files`))
+	console.log('')
+
+	// console.log('Changes synced!')
+	// console.log(`- Added ${changes.added.length} files`)
+	// console.log(`- Changed ${changes.changed.length} files`)
+	// console.log(`- Deleted ${changes.deleted.length} files`)
 	changes.added = []
 	changes.changed = []
 	changes.deleted = []
 })
-
-function updateConfig() {
-	try {
-		config = YML.load(fs.readFileSync('sync-config.yml', 'utf8')) as IConfig
-	} catch (e: any) {
-		console.log('Error reading config file:')
-		console.log(e.message)
-	}
-	for (const [_in, _out] of Object.entries(config.sync_paths)) {
-		if (_out) sync_paths[resolveToAbsolutePath(_in)] = resolveToAbsolutePath(_out)
-		else console.log(`Error: Path '${_in}' has no target path.`)
-	}
-}
 
 function copyOver(in_path: string, out_path: string, stats?: fs.Stats) {
 	const par = pathlib.parse(out_path)
@@ -60,7 +42,7 @@ async function updateWatchers() {
 		await watcher.close()
 	}
 	watchers = []
-	for (const [_in, _out] of Object.entries(sync_paths)) {
+	for (const [_in, _out] of Object.entries(config.sync_paths)) {
 		watchers.push(
 			watch(_in, {
 				ignored: new RegExp(
@@ -93,7 +75,12 @@ async function updateWatchers() {
 }
 
 async function main() {
-	const configWatcher = watch('./sync-config.yml', {
+	if (!fs.existsSync('sync-config.yml')) {
+		console.log('Error: No sync-config.yml file found!')
+		return
+	}
+
+	watch('./sync-config.yml', {
 		ignored: /(^|[\/\\])\../, // ignore dotfiles
 		persistent: true,
 	}).on('change', async (path, stats) => {
